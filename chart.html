@@ -1,0 +1,725 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Network Activity</title>
+    <!-- <link href="flot/examples/examples.css" rel="stylesheet" type="text/css"> -->
+    <script language="javascript" type="text/javascript" src="flot/jquery.js"></script>
+    <script language="javascript" type="text/javascript" src="flot/jquery.flot.js"></script>
+    <!-- <script src="https://cdn.rawgit.com/MichaelZinsmaier/CurvedLines/1.1.1/curvedLines.js"></script> -->
+    <script src="plugin/curvedLines.js"></script>
+    <script type="text/javascript" src="plugin/jquery.flot.axislabels.js"></script>
+    <script src="plugin/jquery.modal.min.js"></script>
+    <link rel="stylesheet" href="plugin/jquery.modal.min.css" />
+    <style>
+    .placeholderparent{
+        /*width: 610px; */
+        /*height: 340px; */
+        margin: 5px;
+        border: 2px solid black;
+        padding: 5px;
+        float: left;
+    }
+    .legends{
+        width: 530px
+    }
+    .yaxis_width{
+        width: 30px;
+    }
+    .placeholder_tx {
+        width: 500px;
+        height: 150px;
+        overflow: hidden;
+        /*border: 2px solid black*/
+    }
+    .placeholder_rx {
+        width: 500px;
+        height: 150px;
+        overflow: hidden;
+        /*border: 2px solid black*/
+    }
+    .rx_tx_bytes_holder{
+        margin-left: 20px;
+        font-family: "Courier New", Courier, monospace;
+    }
+    .legendBox{
+        width:40px;
+        height:20px;
+    }
+    .block_view{
+        display: block;
+        float: left;
+    }
+    .flot-x-axis, .flot-x-axis .flot-tick-label{
+        height: 21px;
+        padding: 0;
+        margin: 0;
+    }
+    .yaxis{
+        -moz-transform: rotate(-90deg);
+        -webkit-transform: rotate(-90deg);
+        -o-transform: rotate(-90deg);
+        -ms-transform: rotate(-90deg);
+        transform: rotate(-90deg);
+        -moz-transform-origin: 0px 0px 0px;
+        -webkit-transform-origin: 0px 0px 0px;
+        -o-transform-origin: 0px 0px 0px;
+        -ms-transform-origin: 0px 0px 0px;
+        transform-origin: 0px 0px 0px;
+        position: absolute;
+        width: 300px;
+        text-align: center;
+
+    }
+    .xtick, .ytick {
+        font-size: 12px;
+        font-weight: bold;
+        height: 21px
+    }
+    .xtick_tx{
+        color: #fff;
+    }
+    tr, td{
+        padding: 0;
+    }
+    </style>
+</head>
+<body>
+    <!-- <div id="demotitle" ><center><h1>Viscous: An End to End Protocol for Ubiquitous Communication Over Internet of Everything</h1><h2>Abhijit Mondal, Sandip Chakraborty</h2><h2>Dept of CSE, IIT Kharagpur, India 721302</h2><h2>Email: abhimondal@iitkgp.ac.in</h2></center></div> -->
+    <div id="demotitle" ><center><h1>Remote Network Activity Monitor</h1></center></div>
+    <div id="container"></div>
+    <div style="position: absolute; display: block; top: 10px; left: 10px">
+        <button id="addServer" title="Add a new server">&#x2605;</button>
+        <!-- <select id="serverList" title="Select Server">
+            <option selected="selected" value=0><tt>&#9776;</tt></option>
+            <option value="T1" server="http://192.168.1.51:8998">T1</option>
+            <option value="R1" server="http://192.168.2.1:8998">R1</option>
+            <option value="R2" server="http://192.168.2.52:8998">R2</option>
+            <option value="R3" server="http://192.168.2.53:8998">R3</option>
+            <option value="RW1" server="http://192.168.2.54:8998">RW1</option>
+            <option value="T2" server="http://192.168.7.62:8998">T2</option>
+        </select>
+        <button id="selectServer" title="Add selected server from the list">&#x2795;</button>
+        <button id="addAllServer" title="Add all server from the list">&#x0229E;</button> -->
+        <button id="livePlayPause" title="Toggle play/pause">&#9654;/&#9646;&#9646;</button>
+        <button id="removeLocalStorage" title="Remove all servers">&#x2716;</button>
+        <button id="allowdot" title="Toggle dot in plot">&#x25EF;</button>
+        <select id="timespan">
+            <option value=10>10 Sec</option>
+            <option value=20>20 Sec</option>
+            <option value=30>30 Sec</option>
+            <option value=40>40 Sec</option>
+            <option value=50>50 Sec</option>
+        </select>
+    </div>
+    <!-- <div class="placeholderparent">
+    <div id="placeholder" class="placeholder"></div>
+    </div> -->
+    <div id="new-server" class="modal">
+        <table width="100%">
+            <tr><td>Name:</td><td><input type="text" id="newservername"></td></tr>
+            <tr><td>Server:</td><td><input type="text" id="newserveraddr"></td></tr>
+            <tr><td colspan="2"><input type="button" name="submit" value="add" id="newserveraddbtn"></td></tr>
+        </table>
+    </div>
+    <script type="text/javascript">
+    var colornames = {"aliceblue":"#f0f8ff","antiquewhite":"#faebd7","aqua":"#00ffff","aquamarine":"#7fffd4","azure":"#f0ffff",
+    "beige":"#f5f5dc","bisque":"#ffe4c4","black":"#000000","blanchedalmond":"#ffebcd","blue":"#0000ff","blueviolet":"#8a2be2","brown":"#a52a2a","burlywood":"#deb887",
+    "cadetblue":"#5f9ea0","chartreuse":"#7fff00","chocolate":"#d2691e","coral":"#ff7f50","cornflowerblue":"#6495ed","cornsilk":"#fff8dc","crimson":"#dc143c","cyan":"#00ffff",
+    "darkblue":"#00008b","darkcyan":"#008b8b","darkgoldenrod":"#b8860b","darkgray":"#a9a9a9","darkgreen":"#006400","darkkhaki":"#bdb76b","darkmagenta":"#8b008b","darkolivegreen":"#556b2f",
+    "darkorange":"#ff8c00","darkorchid":"#9932cc","darkred":"#8b0000","darksalmon":"#e9967a","darkseagreen":"#8fbc8f","darkslateblue":"#483d8b","darkslategray":"#2f4f4f","darkturquoise":"#00ced1",
+    "darkviolet":"#9400d3","deeppink":"#ff1493","deepskyblue":"#00bfff","dimgray":"#696969","dodgerblue":"#1e90ff",
+    "firebrick":"#b22222","floralwhite":"#fffaf0","forestgreen":"#228b22","fuchsia":"#ff00ff",
+    "gainsboro":"#dcdcdc","ghostwhite":"#f8f8ff","gold":"#ffd700","goldenrod":"#daa520","gray":"#808080","green":"#008000","greenyellow":"#adff2f",
+    "honeydew":"#f0fff0","hotpink":"#ff69b4",
+    "indianred ":"#cd5c5c","indigo":"#4b0082","ivory":"#fffff0","khaki":"#f0e68c",
+    "lavender":"#e6e6fa","lavenderblush":"#fff0f5","lawngreen":"#7cfc00","lemonchiffon":"#fffacd","lightblue":"#add8e6","lightcoral":"#f08080","lightcyan":"#e0ffff","lightgoldenrodyellow":"#fafad2",
+    "lightgrey":"#d3d3d3","lightgreen":"#90ee90","lightpink":"#ffb6c1","lightsalmon":"#ffa07a","lightseagreen":"#20b2aa","lightskyblue":"#87cefa","lightslategray":"#778899","lightsteelblue":"#b0c4de",
+    "lightyellow":"#ffffe0","lime":"#00ff00","limegreen":"#32cd32","linen":"#faf0e6",
+    "magenta":"#ff00ff","maroon":"#800000","mediumaquamarine":"#66cdaa","mediumblue":"#0000cd","mediumorchid":"#ba55d3","mediumpurple":"#9370d8","mediumseagreen":"#3cb371","mediumslateblue":"#7b68ee",
+    "mediumspringgreen":"#00fa9a","mediumturquoise":"#48d1cc","mediumvioletred":"#c71585","midnightblue":"#191970","mintcream":"#f5fffa","mistyrose":"#ffe4e1","moccasin":"#ffe4b5",
+    "navajowhite":"#ffdead","navy":"#000080",
+    "oldlace":"#fdf5e6","olive":"#808000","olivedrab":"#6b8e23","orange":"#ffa500","orangered":"#ff4500","orchid":"#da70d6",
+    "palegoldenrod":"#eee8aa","palegreen":"#98fb98","paleturquoise":"#afeeee","palevioletred":"#d87093","papayawhip":"#ffefd5","peachpuff":"#ffdab9","peru":"#cd853f","pink":"#ffc0cb","plum":"#dda0dd","powderblue":"#b0e0e6","purple":"#800080",
+    "rebeccapurple":"#663399","red":"#ff0000","rosybrown":"#bc8f8f","royalblue":"#4169e1",
+    "saddlebrown":"#8b4513","salmon":"#fa8072","sandybrown":"#f4a460","seagreen":"#2e8b57","seashell":"#fff5ee","sienna":"#a0522d","silver":"#c0c0c0","skyblue":"#87ceeb","slateblue":"#6a5acd","slategray":"#708090","snow":"#fffafa","springgreen":"#00ff7f","steelblue":"#4682b4",
+    "tan":"#d2b48c","teal":"#008080","thistle":"#d8bfd8","tomato":"#ff6347","turquoise":"#40e0d0",
+    "violet":"#ee82ee",
+    "wheat":"#f5deb3","white":"#ffffff","whitesmoke":"#f5f5f5",
+    "yellow":"#ffff00","yellowgreen":"#9acd32"};
+    var displayTime = 10
+    function toHumanReadableBytes(valarg, tickDecimals, divider){
+        if(tickDecimals === undefined)
+            tickDecimals = 3
+        if(divider === undefined)
+            divider = 1000
+        var val = Math.abs(valarg)
+        var sign = " "
+        if(valarg < 0)
+            sign = "-"
+        var suffix = " "
+        var suffixes = [" ", "K", "M", "G", "T"]
+        for (var x in suffixes){
+            suffix = suffixes[x]
+            if(val < divider)
+                break
+            val = val/divider
+        }
+        var prefix = ""
+        val = val.toFixed(tickDecimals)
+        for (var i = val.length; i < (4+tickDecimals); i++) {
+            prefix += " "
+        }
+        return  prefix + sign + val + suffix
+    }
+    var options = {
+        series: {
+            // lines: {show: true},
+            // points: {show: true},
+            curvedLines: {active: true},
+        },
+        legend: {
+            show: false,
+            noColumns: 4,
+            labelFormatter: function(label, series){return "<b>"+label+"</b>";},
+            // container: $("#idplacer")
+        },
+        grid: {
+            borderColor: "grey",
+            verticalLines: false,
+            hoverable: true,
+        },
+        xaxis: {
+            min: -displayTime,
+            max: 0,
+            tickFormatter: function(val, axis){
+                return "<pre class='xtick'>" + val + "</pre>"
+            },
+            // tickLength: 0,
+            // labelHeight: 15,
+        },
+        yaxis: {
+            tickDecimals: 0,
+            tickFormatter: function(valarg, axis) {
+                var str = toHumanReadableBytes(valarg, axis.tickDecimals)
+                return "<pre class='ytick'>" + str + "</pre>"
+            },
+            min: 0,
+        },
+        axisLabels: {
+            show: true
+        },
+        // xaxes: [{
+        //     axisLabel: 'foo',
+        // }],
+        // yaxes: [{
+        //     position: 'left',
+        //     axisLabel: 'bar',
+        // }, {
+        //     position: 'right',
+        //     axisLabel: 'bleem'
+        // }],
+        margin: {
+            left: 20,
+        },
+    }
+    // var data = {}
+    function trancateData(data, now, time=600){
+        var maxTime = now
+        var minTime = maxTime-time
+        ndata = []
+        for (var i = 0; i < data.length; i++) {
+            if(data[i][0] < (minTime-3))
+                continue
+            ndata.push(data[i])
+        }
+        return ndata;
+    }
+    function getTimedData(data, now, time){
+        if(time == 0)
+            time = displayTime
+        var maxTime = now
+        var minTime = maxTime-time
+        var xdata = []
+        var lastData = -1
+        var lastTime = 0
+        for (var i = 0; i < data.length; i++) {
+            var x = data[i][0] - minTime
+            var y = data[i][1]
+            if(lastData == -1){
+                lastData = y
+                lastTime = x
+                y = 0
+            }
+            else{
+                z = lastData
+                lastData = y
+                y = (y - z)/(x - lastTime)
+                y = y*8
+                lastTime = x
+            }
+            if(y < 0)
+                continue
+            if(data[i][0] < (minTime-3))
+                continue
+            xdata.push([x-time, y])
+        }
+        return xdata
+    }
+
+    var colors = {"eth0":"red", "eth1":"green", "eth2":"black", "wlan0":"blue"}
+    var otherColors = ["DarkBlue", "DarkSalmon", "GreenYellow", "Cyan"]
+    var otherColorsNum = 0
+    var colorTable = {}
+    function onReceive(res){
+        if(res.query == null || res.query == "")
+            return
+        var data = serversData[res.query].data
+        if (data == null)
+            return
+
+        var plotData = {rx:[], tx:[]}
+        for ( ifc in res["ifcs"]) {
+            xx = {"rx":"rx_bytes", "tx": "tx_bytes"}
+            if (data[ifc] == null)
+                data[ifc] = {}
+            for(px in xx){
+                if(data[ifc][px] == null)
+                    data[ifc][px] = []
+                data[ifc][px].push([res["time"], res["ifcs"][ifc][xx[px]]])
+                data[ifc][px].sort(function(a,b){return a[0]-b[0];})
+            }
+        }
+        legendCnt = 0
+        redrawLegend = false
+        for(var ifc in data){
+
+            if (data[ifc]["rx"].length == 0 && data[ifc]["tx"].length == 0)
+                continue
+            if(serversData[res.query].interfaces[ifc] == null){
+                redrawLegend = true
+                serversData[res.query].interfaces[ifc] = true
+            }
+
+            if (serversData[res.query].interfaces != null && serversData[res.query].interfaces[ifc] != null && serversData[res.query].interfaces[ifc]==false){
+                legendCnt ++
+                continue
+            }
+
+            for(var x in data[ifc]){
+                var xd = getTimedData(data[ifc][x], res["time"], 0)
+                var clr = null;
+                if (colorTable[res.query] && colorTable[res.query][ifc]){
+                    clr = colorTable[res.query][ifc];
+                }
+                if(!clr){
+                    clr = colors[ifc];
+                    if(!clr){
+                        clr = otherColors[otherColorsNum]
+                        colors[ifc] = clr
+                        otherColorsNum++
+                        if(otherColors.length == otherColorsNum)
+                            otherColorsNum = 0;
+                    }
+                    if(!colorTable[res.query]){
+                        colorTable[res.query] = {}
+                    }
+                    if(colornames[clr.toLowerCase()]){
+                        clr = colornames[clr.toLowerCase()];
+                    }
+                    colorTable[res.query][ifc] = clr;
+                    addColorsToStorage();
+                }
+
+                var nd = {
+                    label: x,
+                    data: xd,
+                    color: clr,
+                    curvedLines: {
+                        apply: true,
+                        monotonicFit: true
+                    },
+                    clickable: false,
+                    hoverable: false
+                    // hoverable: true
+                }
+                plotData[x].push(nd)
+                if(allowDotInPlot){
+                    nd2 = {
+                        label: x,
+                        data: xd,
+                        color: clr,
+                        lines: {show: false},
+                        points: {show: true},
+                        clickable: true,
+                        hoverable: true
+                    }
+                    plotData[x].push(nd2)
+                }
+                data[ifc][x] = trancateData(data[ifc][x], res["time"], 120)
+            }
+            legendCnt++
+        }
+        legendCnt = 0
+        if(redrawLegend){
+            serversData[res.query].legend_holder.empty()
+            serversData[res.query].bytes_holder = {}
+            for(var ifc in data){
+                var clr = colorTable[res.query][ifc] // colors[ifc]
+                var lg = $("<div>").css("margin-left", "20px").css("display", "inline-block")
+                var lgtxt = $("<div>").text(ifc+":").addClass("block_view")
+                var lgcolorpicker = $("<input>").attr("type", "color").css("visibility", "hidden").val(clr).attr("data-clr-query", res.query).attr("data-clr-ifc", ifc)
+                var lgcolor = $("<div>").addClass("legendBox").css("background", clr).addClass("block_view").css("margin-left", "20px").append(lgcolorpicker).click(function(){
+                    // console.log($(this).children())
+                    $(this).children()[0].click();
+                })
+                lgcolorpicker.change(function(){
+                    // alert(res.query + " " + ifc + " " + clr + " " + JSON.stringify(data))
+                    var ifc = $(this).attr("data-clr-ifc");
+                    var query = $(this).attr("data-clr-query");
+                    var clr = $(this).val();
+                    // alert(ifc + " " + query);
+                    colorTable[query][ifc] = clr;
+                    $(this).parent().css("background", clr);
+                    // alert(clr);
+                    addColorsToStorage();
+                    serversData[res.query].bytes_holder[ifc].rx_holder.css("color", clr)
+                    serversData[res.query].bytes_holder[ifc].tx_holder.css("color", clr)
+                    // redrawLegend = true;
+                })
+                var lgselect = $("<input>").attr("type", "checkbox").css("float", "left").attr("ifcname", ifc).attr("server", res.query).change(function(){
+                    server = $(this).attr("server")
+                    ifc = $(this).attr("ifcname")
+                    if(serversData[res.query].interfaces[ifc] == true){
+                        serversData[res.query].interfaces[ifc] = false
+                    }
+                    else{
+                        serversData[res.query].interfaces[ifc] = true
+                    }
+                })
+                if(serversData[res.query].interfaces[ifc]){
+                    lgselect.attr("checked", "checked")
+                }
+
+                var lgc = $("<div>").addClass("block_view")
+
+                var tx_bytes = $("<span></span>").css("color", clr)
+                var tx_holder = $("<div></div>").addClass("rx_tx_bytes_holder").html("&uarr;TX:").append(tx_bytes)//.addClass("block_view")
+                var rx_bytes = $("<span></span>").css("color", clr)
+                var rx_holder = $("<div></div>").addClass("rx_tx_bytes_holder").html("<bold>&darr;</bold>RX:").append(rx_bytes)//.addClass("block_view")
+
+                lg.append(lgselect).append(lgtxt).append(lgcolor)//.append(lgcolorpicker)
+                lgc.append(lg).append(tx_holder).append(rx_holder)
+
+                serversData[res.query].legend_holder.append(lgc)
+                serversData[res.query].bytes_holder[ifc] = {rx_holder : rx_bytes, tx_holder: tx_bytes}
+                legendCnt++
+            }
+        }
+        serversData[res.query].data = data
+
+        options.xaxis.tickFormatter = function(val, axis){return "<pre class='xtick'>" + val + "</pre>"}
+        $.plot(serversData[res.query].placeholder_rx, plotData.rx, options)
+
+        options.xaxis.tickFormatter = function(val, axis){return "<pre class='xtick xtick_tx'>" + val + "</pre>"}
+        $.plot(serversData[res.query].placeholder_tx, plotData.tx, options)
+        if(serversData[res.query].bytes_holder !== undefined){
+            for ( ifc in res["ifcs"]) {
+                if(serversData[res.query].bytes_holder[ifc] !== undefined && serversData[res.query].bytes_holder[ifc].rx_holder !== undefined)
+                    serversData[res.query].bytes_holder[ifc].rx_holder.html(toHumanReadableBytes(res.ifcs[ifc].rx_bytes))
+
+                if(serversData[res.query].bytes_holder[ifc] !== undefined && serversData[res.query].bytes_holder[ifc].tx_holder !== undefined)
+                    serversData[res.query].bytes_holder[ifc].tx_holder.html(toHumanReadableBytes(res.ifcs[ifc].tx_bytes))
+            }
+        }
+    }
+
+    var serversData = {}
+    var runPlotInterval = null
+    function fetchData(){
+        for(id in serversData){
+            $.ajax({
+                url: serversData[id].server,
+                data: id,
+                type: "GET",
+                success: function(res){onReceive(res)}
+            })
+        }
+        // if(run)
+        //     setTimeout(fetchData, 1000);
+    }
+    function playPlot(){
+        if(runPlotInterval)
+            return;
+        runPlotInterval = setInterval(fetchData, 1000)
+    }
+    function pausePlot() {
+        if(!runPlotInterval)
+            return;
+        clearInterval(runPlotInterval);
+        runPlotInterval = null;
+    }
+    function closeServer(serverId){
+        if(!confirm("closing server : " + serversData[serverId].name)){
+            return;
+        }
+
+        serversData[serverId].placeholder_parent.remove();
+        server = serversData[serverId].server;
+        name = serversData[serverId].name;
+        delete serversData[serverId];
+        delete colorTable[serverId];
+        addColorsToStorage();
+        if(typeof(Storage) !== "undefined") {
+            if (localStorage.serverinfo) {
+                var serverinfo = JSON.parse(localStorage.serverinfo)
+                var newServerInfo = []
+                for (var i = 0; i < serverinfo.length; i++) {
+                    if(serverinfo[i][0] == server && serverinfo[i][1] == name)
+                        continue
+                    newServerInfo.push([serverinfo[i][0], serverinfo[i][1], serverinfo[i][2]])
+                }
+                localStorage.serverinfo = JSON.stringify(newServerInfo)
+            }
+        }
+
+    }
+    var count = 0
+    var run = false
+    var allowDotInPlot = false
+    function addServer(server, name, id){
+        // var id = count
+        // count ++
+        var dt = {server:server, name:name, data:{}, id:"server"+id}
+        var container = $("<div>").addClass("placeholderparent")
+        var close = $("<span>&#10006;</span>").css("float", "right").css("cursor", "pointer").css("color", "red").click(function(){closeServer("server"+id)})
+        var title = $("<center><h2 style='margin:0'>"+name+"</h2></center>")
+        container.append(close)
+        container.append(title)
+        var table = $("<table>")
+        var row1 = $("<tr>")
+        var rc1 = $("<td>").addClass("yaxis_width")
+                            .css("vertical-align", "bottom")
+
+        var yaxis = $("<div>").addClass("yaxis")
+                            .html("Speed (bps)<br>RX&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TX")
+        rc1.append(yaxis)
+        var parent = $("<td>")
+        row1.append(rc1).append(parent)
+        var row2 = $("<tr>").append("<td>")
+        var xaxis = $("<td>").css("text-align", "center").text("Time (seconds)")
+        row2.append(xaxis)
+
+        table.append(row1).append(row2)
+        container.append(table)
+
+        var row3 = $("<tr>")
+        var legends = $("<td>").addClass("legends").attr("colspan", 2)
+                            .html("&nbsp;")
+        row3.append(legends)
+        table.append(row3)
+
+        var placeholder_tx = $("<div>").addClass("placeholder_tx")//.addClass("placeholder_width")
+        dt["placeholder_tx"] = placeholder_tx
+        parent.append(placeholder_tx)
+
+        var placeholder_rx = $("<div>").addClass("placeholder_rx")
+        dt["placeholder_rx"] = placeholder_rx
+        parent.append(placeholder_rx)
+
+        dt["placeholder_parent"] = container
+        dt["legend_holder"] = legends
+
+        $("#container").append(container)
+        // run = true
+        dt["interfaces"] = {}
+        serversData["server"+id] = dt
+        if(!runPlotInterval)
+            playPlot()
+
+        placeholder_rx.bind("plothover", showToolTip).bind("plothovercleanup", hideToolTip)
+        placeholder_tx.bind("plothover", showToolTip).bind("plothovercleanup", hideToolTip)
+        // if(!run){
+        //     run = true
+        //     fetchData()
+        // }
+
+    }
+    function showToolTip(event, pos, item){
+        if (item) {
+            var x = item.datapoint[0].toFixed(2),
+                y = toHumanReadableBytes(item.datapoint[1]);
+                // console.log(item)
+
+            $("#tooltip").html(item.series.label + ": (" + x + "=" + y + ")")
+                .css({top: item.pageY+5, left: item.pageX+5})
+                .fadeIn(200);
+        } else {
+            $("#tooltip").hide();
+        }
+    }
+    function hideToolTip(event, pos, item){
+        $("#tooltip").hide();
+
+    }
+    function add2Storage(server, name, id){
+
+        if(typeof(Storage) !== "undefined") {
+            if (localStorage.serverinfo) {
+                var serverinfo = JSON.parse(localStorage.serverinfo)
+                serverinfo.push([server, name, id])
+                localStorage.serverinfo = JSON.stringify(serverinfo)
+            } else {
+                localStorage.serverinfo = JSON.stringify([[server, name, id]])
+            }
+        }
+    }
+    function addColorsToStorage(){
+        if(typeof(Storage) !== "undefined") {
+            // if (localStorage.colo) {
+            //     var serverinfo = JSON.parse(localStorage.serverinfo)
+            //     serverinfo.push([server, name, id])
+            //     localStorage.serverinfo = JSON.stringify(serverinfo)
+            // } else {
+            localStorage.colorTable = JSON.stringify(colorTable)
+            // }
+        }
+    }
+    $("#addServer").click(function(){
+        $('#new-server').modal();
+        return;
+    })
+    $("#newserveraddbtn").click(function(){
+        var server= $("#newserveraddr").val(); //prompt("Server url")
+        var name= $("#newservername").val(); //prompt("name");
+        $("#newserveraddr").val("")
+        $("#newservername").val("")
+        if(server == "" || server == null || name == "" || name == null){
+            alert("invalid input")
+            return
+        }
+        if(!server.startsWith("https://") || !server.startsWith("http://")){
+            server = "http://"+server
+        }
+        var date = new Date()
+        var id = date.getTime()
+        addServer(server, name, id)
+        add2Storage(server, name, id)
+
+        $.modal.close();
+    })
+    $(document).ready(function(){
+        $("<div id='tooltip'></div>").css({
+            position: "absolute",
+            display: "none",
+            border: "1px solid #fdd",
+            padding: "2px",
+            "background-color": "#fee",
+            opacity: 0.80
+        }).appendTo("body");
+
+        if(typeof(Storage) !== "undefined") {
+            if (localStorage.serverinfo) {
+                var serverinfo = JSON.parse(localStorage.serverinfo)
+                for (var i = 0; i < serverinfo.length; i++) {
+                    addServer(serverinfo[i][0], serverinfo[i][1], serverinfo[i][2])
+                }
+            }
+            if(localStorage.colorTable){
+                colorTable = JSON.parse(localStorage.colorTable);
+            }
+            if(localStorage.displayTime){
+                displayTime = localStorage.displayTime
+                $("#timespan").val(displayTime)
+                options["xaxis"].min = -displayTime
+            }
+            else
+                $("#timespan").val(10)
+        }
+        $("#serverList").val(0)
+        //
+        Date.prototype.yyyymmdd = function() {
+          var mm = this.getMonth() + 1; // getMonth() is zero-based
+          var dd = this.getDate();
+          var hh = this.getHours();
+          var MM = this.getMinutes();
+          var ss = this.getSeconds();
+
+          return [this.getFullYear(),
+                  (mm>9 ? '' : '0') + mm,
+                  (dd>9 ? '' : '0') + dd,
+                  (hh>9 ? '' : '0') + hh,
+                  (MM>9 ? '' : '0') + MM,
+                  (ss>9 ? '' : '0') + ss,
+
+                 ].join('');
+        };
+
+        // var date = new Date();
+        // alert(date.yyyymmdd());
+
+
+    })
+
+    $("#removeLocalStorage").click(function(){
+        if(!confirm("Do you really want that?"))
+            return
+        if(typeof(Storage) !== "undefined") {
+            localStorage.clear()
+        }
+        location.reload()
+    })
+    $("#livePlayPause").click(function(){
+        if(runPlotInterval){
+            pausePlot()
+        }
+        else{
+            playPlot()
+        }
+        // if(run){
+        //     run = false
+        // }
+        // else{
+        //     run = true
+        //     fetchData()
+        // }
+    });
+    $("#timespan").change(function(){
+        displayTime = $("#timespan").val()
+        options["xaxis"].min = -displayTime
+        localStorage.displayTime = displayTime
+    })
+    $("#allowdot").click(function(){
+        if(allowDotInPlot)
+            allowDotInPlot = false
+        else
+            allowDotInPlot = true
+    })
+    $("#selectServer").click(function(){
+        serverName = $("#serverList").val()
+        if(serverName == 0){
+            return
+        }
+        address = $("#serverList option:selected").attr("server")
+        var date = new Date();
+        addServer(address, serverName, date.getTime())
+        add2Storage(address, serverName, date.getTime())
+        $("#serverList").val(0)
+    })
+    $("#addAllServer").click(function(){
+        var count = 0;
+        var date = new Date()
+        $("#serverList option").each(function(){
+            serverName = $(this).val()
+            address = $(this).attr("server")
+            if(serverName == 0)
+                return
+            addServer(address, serverName, count + date.getTime())
+            add2Storage(address, serverName, count + date.getTime())
+            count ++;
+        })
+    })
+    </script>
+</body>
+</html>
+
