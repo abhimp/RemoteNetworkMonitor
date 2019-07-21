@@ -1,10 +1,19 @@
-import SimpleHTTPServer
-import BaseHTTPServer
-import SocketServer
+from __future__ import print_function
+import sys
+
+if sys.version_info < (3,):
+    import SimpleHTTPServer
+    import BaseHTTPServer
+    import SocketServer
+else:
+    import http.server as SimpleHTTPServer
+    import http.server as BaseHTTPServer
+    import socketserver as SocketServer
+
 import os
 import time
 import json
-import sys
+
 
 PORT = 8000
 
@@ -93,5 +102,5 @@ if len(sys.argv) > 1:
 
 httpd = SocketServer.TCPServer(("", PORT), Handler)
 
-print "serving at port", PORT
+print("serving at port", PORT)
 httpd.serve_forever()
