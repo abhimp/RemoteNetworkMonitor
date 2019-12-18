@@ -12,6 +12,17 @@
     <script src="plugin/jquery.modal.min.js"></script>
     <link rel="stylesheet" href="plugin/jquery.modal.min.css" />
     <style>
+
+    input.infoInput{
+        border: none;
+        border-bottom: transparent thin solid;
+    }
+    /*input.infoInput:hover{
+        border-bottom: gray thin solid;
+    }*/
+    input.infoInput:focus{
+        border-bottom: gray thin solid;
+    }
     .placeholderparent{
         /*width: 610px; */
         /*height: 340px; */
@@ -35,7 +46,7 @@
     .placeholder_rx {
         width: 500px;
         height: 150px;
-        overflow: hidden;
+        /*overflow: hidden;*/
         /*border: 2px solid black*/
     }
     .rx_tx_bytes_holder{
@@ -122,6 +133,14 @@
             <tr><td colspan="2"><input type="button" name="submit" value="add" id="newserveraddbtn"></td></tr>
         </table>
     </div>
+    <div id="editserver" class="modal">
+        <table width="100%">
+            <input type="hidden" id="editserverid">
+            <tr><td>Name:</td><td><input type="text" id="editservername" class="infoInput"></td></tr>
+            <tr><td>Server:</td><td><input type="text" id="editserveraddr" class="infoInput"></td></tr>
+            <tr><td colspan="2"><input type="button" name="submit" value="Change" id="editserveraddbtn"></td></tr>
+        </table>
+    </div>
     <script type="text/javascript">
     var colornames = {"aliceblue":"#f0f8ff","antiquewhite":"#faebd7","aqua":"#00ffff","aquamarine":"#7fffd4","azure":"#f0ffff",
     "beige":"#f5f5dc","bisque":"#ffe4c4","black":"#000000","blanchedalmond":"#ffebcd","blue":"#0000ff","blueviolet":"#8a2be2","brown":"#a52a2a","burlywood":"#deb887",
@@ -199,7 +218,7 @@
             // labelHeight: 15,
         },
         yaxis: {
-            tickDecimals: 0,
+            tickDecimals: 1,
             tickFormatter: function(valarg, axis) {
                 var str = toHumanReadableBytes(valarg, axis.tickDecimals)
                 return "<pre class='ytick'>" + str + "</pre>"
@@ -268,7 +287,7 @@
     }
 
     var colors = {"eth0":"red", "eth1":"green", "eth2":"black", "wlan0":"blue"}
-    var otherColors = ["DarkBlue", "DarkSalmon", "GreenYellow", "Cyan"]
+    var otherColors = ["DarkBlue", "DarkSalmon", "GreenYellow", "Cyan"]; //Object.keys(colornames); //
     var otherColorsNum = 0
     var colorTable = {}
     function onReceive(res){
@@ -436,6 +455,7 @@
 
     var serversData = {}
     var runPlotInterval = null
+
     function fetchData(){
         for(id in serversData){
             $.ajax({
@@ -448,25 +468,28 @@
         // if(run)
         //     setTimeout(fetchData, 1000);
     }
+
     function playPlot(){
         if(runPlotInterval)
             return;
         runPlotInterval = setInterval(fetchData, 1000)
     }
+
     function pausePlot() {
         if(!runPlotInterval)
             return;
         clearInterval(runPlotInterval);
         runPlotInterval = null;
     }
-    function closeServer(serverId){
+
+    function closeServer(serverId) {
         if(!confirm("closing server : " + serversData[serverId].name)){
             return;
         }
 
         serversData[serverId].placeholder_parent.remove();
-        server = serversData[serverId].server;
-        name = serversData[serverId].name;
+        var server = serversData[serverId].server;
+        var name = serversData[serverId].name;
         delete serversData[serverId];
         delete colorTable[serverId];
         addColorsToStorage();
@@ -484,17 +507,95 @@
         }
 
     }
+
+    function getServerInfo(serverId) {
+        // console.log(serversData[serverId])
+        var server = serversData[serverId].server;
+        var name = serversData[serverId].name;
+        $("#editserveraddr").val(server)
+        $("#editservername").val(name)
+        $("#editserverid").val(serverId)
+        $('#editserver').modal();
+    }
+
+    $("#editserveraddbtn").click(function(){
+        var serverId = $("#editserverid").val(); //prompt("Server url")
+        var oldServer = serversData[serverId].server;
+        var oldName = serversData[serverId].name;
+
+        var newServer = $("#editserveraddr").val(); //prompt("Server url")
+        var newName= $("#editservername").val(); //prompt("name");
+        
+        if(oldServer == "" || oldServer == null || oldName == "" || oldName == null){
+            alert("invalid input")
+            return
+        }
+        
+        if(!newServer.startsWith("https://") && !newServer.startsWith("http://")){
+            newServer = "http://" + newServer
+        }
+
+        var chngServer = "";
+        if(newServer != oldServer)
+            chngServer += "server address from `" + oldServer + "` to `" + newServer + "`"
+        if(newName != oldName) {
+            if(chngServer != "")
+                chngServer += " and "
+            chngServer += "server name from `" + oldName + "` to `" + newName + "`"
+        }
+        if(chngServer != "") {
+            if(!confirm("Do you want to change " + chngServer)){
+                console.log("not confirmed")
+                return;
+            }
+        }
+        else{
+            console.log("no change")
+            $.modal.close();
+            return;
+        }
+
+        $("#editserveraddr").val("")
+        $("#editservername").val("")
+
+        serversData[serverId].server = newServer;
+        serversData[serverId].name = newName;
+        // console.log(serversData[serverId])
+        var serverStorageId = serversData[serverId].storageId
+
+        if(typeof(Storage) !== "undefined") {
+            if (localStorage.serverinfo) {
+                var serverinfo = JSON.parse(localStorage.serverinfo)
+                var newServerInfo = []
+                for (var i = 0; i < serverinfo.length; i++) {
+                    if(serverinfo[i][2] == serverStorageId) {
+                        newServerInfo.push([newServer, newName, serverStorageId])
+                    }
+                    else {
+                        newServerInfo.push([serverinfo[i][0], serverinfo[i][1], serverinfo[i][2]])
+                    }
+                }
+                // console.log(newServerInfo)
+                localStorage.serverinfo = JSON.stringify(newServerInfo)
+            }
+        }
+
+        $.modal.close();
+    })
+
     var count = 0
     var run = false
     var allowDotInPlot = false
+
     function addServer(server, name, id){
-        // var id = count
-        // count ++
-        var dt = {server:server, name:name, data:{}, id:"server"+id}
+        var dt = {server:server, name:name, data:{}, id:"server"+id, storageId: id}
         var container = $("<div>").addClass("placeholderparent")
+        var info = $("<span>&#x1F6C8;</span>").css("float", "left").css("cursor", "pointer").css("color", "green").click(function(){getServerInfo("server"+id)})
         var close = $("<span>&#10006;</span>").css("float", "right").css("cursor", "pointer").css("color", "red").click(function(){closeServer("server"+id)})
+
         var title = $("<center><h2 style='margin:0'>"+name+"</h2></center>")
         container.append(close)
+        container.append(info)
         container.append(title)
         var table = $("<table>")
         var row1 = $("<tr>")
@@ -531,7 +632,6 @@
         dt["legend_holder"] = legends
 
         $("#container").append(container)
-        // run = true
         dt["interfaces"] = {}
         serversData["server"+id] = dt
         if(!runPlotInterval)
@@ -539,12 +639,9 @@
 
         placeholder_rx.bind("plothover", showToolTip).bind("plothovercleanup", hideToolTip)
         placeholder_tx.bind("plothover", showToolTip).bind("plothovercleanup", hideToolTip)
-        // if(!run){
-        //     run = true
-        //     fetchData()
-        // }
 
     }
+
     function showToolTip(event, pos, item){
         if (item) {
             var x = item.datapoint[0].toFixed(2),
@@ -558,12 +655,13 @@
             $("#tooltip").hide();
         }
     }
+
     function hideToolTip(event, pos, item){
         $("#tooltip").hide();
 
     }
-    function add2Storage(server, name, id){
 
+    function add2Storage(server, name, id){
         if(typeof(Storage) !== "undefined") {
             if (localStorage.serverinfo) {
                 var serverinfo = JSON.parse(localStorage.serverinfo)
@@ -574,6 +672,7 @@
             }
         }
     }
+
     function addColorsToStorage(){
         if(typeof(Storage) !== "undefined") {
             // if (localStorage.colo) {
@@ -585,10 +684,12 @@
             // }
         }
     }
+
     $("#addServer").click(function(){
         $('#new-server').modal();
         return;
     })
+
     $("#newserveraddbtn").click(function(){
         var server= $("#newserveraddr").val(); //prompt("Server url")
         var name= $("#newservername").val(); //prompt("name");
@@ -598,7 +699,7 @@
             alert("invalid input")
             return
         }
-        if(!server.startsWith("https://") || !server.startsWith("http://")){
+        if(!server.startsWith("https://") && !server.startsWith("http://")){
             server = "http://"+server
         }
         var date = new Date()
@@ -608,6 +709,7 @@
 
         $.modal.close();
     })
+
     $(document).ready(function(){
         $("<div id='tooltip'></div>").css({
             position: "absolute",
@@ -637,7 +739,7 @@
                 $("#timespan").val(10)
         }
         $("#serverList").val(0)
-        //
+
         Date.prototype.yyyymmdd = function() {
           var mm = this.getMonth() + 1; // getMonth() is zero-based
           var dd = this.getDate();
@@ -654,11 +756,6 @@
 
                  ].join('');
         };
-
-        // var date = new Date();
-        // alert(date.yyyymmdd());
-
-
     })
 
     $("#removeLocalStorage").click(function(){
@@ -669,6 +766,7 @@
         }
         location.reload()
     })
+
     $("#livePlayPause").click(function(){
         if(runPlotInterval){
             pausePlot()
@@ -676,25 +774,21 @@
         else{
             playPlot()
         }
-        // if(run){
-        //     run = false
-        // }
-        // else{
-        //     run = true
-        //     fetchData()
-        // }
     });
+
     $("#timespan").change(function(){
         displayTime = $("#timespan").val()
         options["xaxis"].min = -displayTime
         localStorage.displayTime = displayTime
     })
+
     $("#allowdot").click(function(){
         if(allowDotInPlot)
             allowDotInPlot = false
         else
             allowDotInPlot = true
     })
+
     $("#selectServer").click(function(){
         serverName = $("#serverList").val()
         if(serverName == 0){
@@ -706,6 +800,7 @@
         add2Storage(address, serverName, date.getTime())
         $("#serverList").val(0)
     })
+
     $("#addAllServer").click(function(){
         var count = 0;
         var date = new Date()
