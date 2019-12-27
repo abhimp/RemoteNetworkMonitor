@@ -123,6 +123,10 @@
             <option value=50>50 Sec</option>
         </select>
     </div>
+    <div style="position: absolute; display: block; top: 10px; right: 10px">
+        <button id="exportConfig" title="Export current config">&#x1F4BE;</button>
+        <button id="importConfig" title="Import previously stored config">&#x1f4c2;</button>
+    </div>
     <!-- <div class="placeholderparent">
     <div id="placeholder" class="placeholder"></div>
     </div> -->
@@ -141,6 +145,24 @@
             <tr><td colspan="2"><input type="button" name="submit" value="Change" id="editserveraddbtn"></td></tr>
         </table>
     </div>
+
+    <div id="confirmRestore" class="modal">
+        <table width="100%">
+            <tr><td colspan="2">Are you sure? This action will wipe current layout and load the stored one.</td></tr>
+            <tr>
+                <td align="right" width="50%">
+                    <input type="button" name="No" value="No" id="confirmRestoreNoBtn" style="background-color: green;color: white;font-weight: bold;border-radius: 10%;padding: 5% 10%;border: none;font-size: 120%;">
+                </td>
+                <td align="left">
+                    <input type="button" name="Yes" value="Yes" id="confirmRestoreYesBtn" style="background-color: red;color: white;font-weight: bold;border-radius: 10%;padding: 5% 10%;border: none;font-size: 120%;">
+                </td>
+            </tr>
+        </table>
+    </div>
+    <!-- <a id="configDownload" style="display:none"></a>
+    <input id="configUpload" type="file" accept="text/plain" style="display: none"> -->
+
+
     <script type="text/javascript">
     var colornames = {"aliceblue":"#f0f8ff","antiquewhite":"#faebd7","aqua":"#00ffff","aquamarine":"#7fffd4","azure":"#f0ffff",
     "beige":"#f5f5dc","bisque":"#ffe4c4","black":"#000000","blanchedalmond":"#ffebcd","blue":"#0000ff","blueviolet":"#8a2be2","brown":"#a52a2a","burlywood":"#deb887",
@@ -525,12 +547,12 @@
 
         var newServer = $("#editserveraddr").val(); //prompt("Server url")
         var newName= $("#editservername").val(); //prompt("name");
-        
+
         if(oldServer == "" || oldServer == null || oldName == "" || oldName == null){
             alert("invalid input")
             return
         }
-        
+
         if(!newServer.startsWith("https://") && !newServer.startsWith("http://")){
             newServer = "http://" + newServer
         }
@@ -814,6 +836,100 @@
             count ++;
         })
     })
+
+    $("#exportConfig").click(function(){
+        if(typeof(Storage) !== "undefined") {
+            var serverinfo = null;
+            var colorTable = null;
+            var displayTime = null;
+            if (localStorage.serverinfo) {
+                serverinfo = localStorage.serverinfo;
+            }
+            if(localStorage.colorTable){
+                colorTable = localStorage.colorTable;
+            }
+            if(localStorage.displayTime){
+                displayTime = localStorage.displayTime
+            }
+
+            var data = {
+                serverinfo: serverinfo,
+                colorTable: colorTable,
+                displayTime: displayTime
+            }
+            var dataStr = JSON.stringify(data)
+            downloadAsFile("config.json", dataStr, "json/application")
+        }
+        else{
+            alert("ERROR!! local storage is not supported in your browser")
+        }
+    })
+
+    $("#importConfig").click(function(){
+
+        if(typeof(Storage) !== "undefined") {
+            $("#confirmRestore").modal()
+        }
+        else{
+            alert("ERROR!! local storage is not supported in your browser")
+        }
+    })
+
+    $("#confirmRestoreNoBtn").click(function(){
+        $.modal.close()
+        return false
+    })
+
+    $("#confirmRestoreYesBtn").click(function(){
+        var element = document.createElement('input');
+        // var element = document.querySelector("#configUpload");
+        element.setAttribute("type", "file")
+        element.setAttribute("accept", "application/json")
+        element.onchange = function(event){
+            var input = event.target
+            var reader = new FileReader();
+            reader.onload = function(){
+
+                var text = reader.result;
+                var jsonData = JSON.parse(text)
+                if("serverinfo" in jsonData){
+                    localStorage.serverinfo = jsonData["serverinfo"]
+                }
+                if("colorTable" in jsonData){
+                    localStorage.colorTable = jsonData["colorTable"]
+                }
+                if("displayTime" in jsonData){
+                    localStorage.displayTime = jsonData["displayTime"]
+                }
+                console.log(jsonData);
+                location.reload()
+            };
+            reader.readAsText(input.files[0]);
+        }
+        document.body.appendChild(element);
+
+        element.click();
+
+        document.body.removeChild(element);
+        $.modal.close()
+        return false
+    })
+    function downloadAsFile(filename, text, mime) {
+        if(typeof(mime) == "undefined"){
+            mime = "text/plain"
+        }
+        var element = document.createElement('a');
+        // var element = document.querySelector("#configDownload");
+        element.setAttribute('href', 'data:' + mime + ';charset=utf-8,' + encodeURIComponent(text));
+        element.setAttribute('download', filename);
+
+        element.style.display = 'none';
+        document.body.appendChild(element);
+
+        element.click();
+
+        document.body.removeChild(element);
+    }
     </script>
 </body>
 </html>

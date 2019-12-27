@@ -15,6 +15,8 @@
 #include <ctype.h>
 #include <sys/wait.h>
 
+#include "files.h"
+
 // Check windows
 #if _WIN32 || _WIN64
 #if _WIN64
@@ -148,6 +150,7 @@ void runServerForever(int listenfd) {
             continue;
 
         respond(clientFd, clientaddr, addrlen);
+        close(clientFd);
 
     }
 }
@@ -255,6 +258,32 @@ int sprintfStat(char *buf, size_t len) {
     return wrote;
 }
 
+int sprintfNetworkStat(char *response, int retlen, char *query) {
+    int rd = 0;
+    int wrote = 0;
+
+    response[wrote++] = '{';
+
+    rd = snprintf(response + wrote, retlen - wrote, "\"time\":");
+    wrote += rd;
+    rd = sprintfTime(response + wrote, retlen - wrote);
+    wrote += rd;
+    response[wrote++] = ',';
+
+    rd = snprintf(response + wrote, retlen - wrote, "\"ifcs\":");
+    wrote += rd;
+    rd = sprintfStat(response + wrote, retlen - wrote);
+    wrote += rd;
+    response[wrote++] = ',';
+
+    rd = snprintf(response + wrote, retlen - wrote, "\"query\": \"%s\"}", query);
+    wrote += rd;
+
+    response[wrote] = 0;
+
+    return wrote;
+}
+
 /*
  * In simple application like this, I only need to read the querystring in the
  * first line of the request. I can safely ignore each and every line here.
@@ -268,7 +297,8 @@ void respond(int sockFd, struct sockaddr_in clientaddr, socklen_t addrlen) {
     int rcvd, bytes_read;
     FILE *fp;
 
-    char response[BUF_LEN]; //TODO add dynaic memory to support extreamly large num of interfaces
+    char rbuf[BUF_LEN]; //TODO add dynaic memory to support extreamly large num of interfaces
+    char *response = rbuf;
 
 
     fp = fdopen(sockFd, "r+");
@@ -291,48 +321,57 @@ void respond(int sockFd, struct sockaddr_in clientaddr, socklen_t addrlen) {
     }
 
     char *method = strtok(buf, " ");
-    char *path = strtok(NULL, "?");
+    char *path = strtok(NULL, "? ");
     char *query = strtok(NULL, " ");
 
-//     printf("method: %s\n", method);
-//     printf("path: %s\n", path);
+//     printf("method: %s ", method);
+//     printf("path: %s ", path);
 //     printf("query: %s\n", query);
 
     int rd = 0;
     int wrote = 0;
     int retlen = BUF_LEN;
-    response[wrote++] = '{';
 
-    rd = snprintf(response + wrote, retlen - wrote, "\"time\":");
-    wrote += rd;
-    rd = sprintfTime(response + wrote, retlen - wrote);
-    wrote += rd;
-    response[wrote++] = ',';
+    int i;
+    int found = 0;
+    char *mime = "application/json";
+    for(i = 0; path[0] && path[1] && files[i][0]; i++){
+//         printf("%s<=>%s\n", files[i][0], path+1);
+        if(strcmp(files[i][0], path+1) == 0) {
+//             printf("mathing\n");
+            found = 1;
+            break;
+        }
+    }
+//     printf("found: %d, i: %d\n", found, i);
 
-    rd = snprintf(response + wrote, retlen - wrote, "\"ifcs\":");
-    wrote += rd;
-    rd = sprintfStat(response + wrote, retlen - wrote);
-    wrote += rd;
-    response[wrote++] = ',';
+    int clen = 0;
+    char *header = response;
 
-    rd = snprintf(response + wrote, retlen - wrote, "\"query\": \"%s\"}", query);
-    wrote += rd;
+    if(found) {
+        header = response;
+        clen = atoi(files[i][2]);
+        response = files[i][1];
+        mime = files[i][3];
+//         printf("clen: %d, mime: %s\n", clen, mime);
+    }
+    else{
+        rd = sprintfNetworkStat(response + wrote, retlen - wrote, query);
+        wrote += rd;
+        clen = wrote;
 
-    response[wrote] = 0;
+        header = response + wrote + 4;
+        retlen -= 4;
+        wrote = 0;
+    }
 
-//     printf("%s\n", response);
 
-    int clen = wrote;
-
-    char *header = response + wrote + 4;
-    retlen -= 4;
-    wrote = 0;
 
     wrote += snprintf(header + wrote, retlen - wrote, "HTTP/1.0 200 OK\r\n");
     wrote += snprintf(header + wrote, retlen - wrote, "Server: AONGBONG\r\n");
-    wrote += snprintf(header + wrote, retlen - wrote, "Content-Length: %d\r\n", retlen);
+    wrote += snprintf(header + wrote, retlen - wrote, "Content-Length: %d\r\n", clen);
     wrote += snprintf(header + wrote, retlen - wrote, "Access-Control-Allow-Origin: *\r\n");
-    wrote += snprintf(header + wrote, retlen - wrote, "Content-Type: application/json\r\n");
+    wrote += snprintf(header + wrote, retlen - wrote, "Content-Type: %s\r\n", mime);
     wrote += snprintf(header + wrote, retlen - wrote, "\r\n");
     header[wrote] = 0;
 
