@@ -388,5 +388,8 @@ void respond(int sockFd, struct sockaddr_in clientaddr, socklen_t addrlen) {
 
 
 int main(int argc, char *argv[]) {
-    serve_forever(argv[1]);
+    char *port = "9889";
+    if(argc > 1)
+        port = argv[1];
+    serve_forever(port);
 }

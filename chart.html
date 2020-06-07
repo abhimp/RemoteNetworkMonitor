@@ -32,7 +32,9 @@
         float: left;
     }
     .legends{
-        width: 530px
+        width: 530px;
+        white-space: nowrap;
+        overflow-x: scroll;
     }
     .yaxis_width{
         width: 30px;
@@ -58,8 +60,8 @@
         height:20px;
     }
     .block_view{
-        display: block;
-        float: left;
+        display: inline-block;
+        float: none;
     }
     .flot-x-axis, .flot-x-axis .flot-tick-label{
         height: 21px;
@@ -408,9 +410,9 @@
             for(var ifc in data){
                 var clr = colorTable[res.query][ifc] // colors[ifc]
                 var lg = $("<div>").css("margin-left", "20px").css("display", "inline-block")
-                var lgtxt = $("<div>").text(ifc+":").addClass("block_view")
+                var lgtxt = $("<div>").text(ifc+":").addClass("block_view").css("margin-left", "15px")
                 var lgcolorpicker = $("<input>").attr("type", "color").css("visibility", "hidden").val(clr).attr("data-clr-query", res.query).attr("data-clr-ifc", ifc)
-                var lgcolor = $("<div>").addClass("legendBox").css("background", clr).addClass("block_view").css("margin-left", "20px").append(lgcolorpicker).click(function(){
+                var lgcolor = $("<div>").addClass("legendBox").css("background", clr).addClass("block_view").css("margin-left", "5px").append(lgcolorpicker).click(function(){
                     // console.log($(this).children())
                     $(this).children()[0].click();
                 })
@@ -449,7 +451,7 @@
                 var rx_bytes = $("<span></span>").css("color", clr)
                 var rx_holder = $("<div></div>").addClass("rx_tx_bytes_holder").html("<bold>&darr;</bold>RX:").append(rx_bytes)//.addClass("block_view")
 
-                lg.append(lgselect).append(lgtxt).append(lgcolor)//.append(lgcolorpicker)
+                lg.append(lgselect).append(lgcolor).append(lgtxt)//.append(lgcolorpicker)
                 lgc.append(lg).append(tx_holder).append(rx_holder)
 
                 serversData[res.query].legend_holder.append(lgc)
@@ -637,9 +639,9 @@
         container.append(table)
 
         var row3 = $("<tr>")
-        var legends = $("<td>").addClass("legends").attr("colspan", 2)
-                            .html("&nbsp;")
-        row3.append(legends)
+        var legendtd = $("<td>").attr("colspan", 2)
+        var legends = $("<div>").addClass("legends").html("&nbsp;").appendTo(legendtd)
+        row3.append(legendtd)
         table.append(row3)
 
         var placeholder_tx = $("<div>").addClass("placeholder_tx")//.addClass("placeholder_width")
