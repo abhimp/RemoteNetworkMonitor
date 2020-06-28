@@ -26,17 +26,16 @@ with open("files.h", "w") as wfp:
     for i, f in enumerate(path):
         ext = f[0].rfind(".")
         ext = '' if ext < 0 else f[0][ext+1:].lower()
-#         if ext in mimes: continue
+        if ext in ["map", 'txt']: continue
         stlen = 0
         if ext in mimes:
-#             continue
             print("#define DATA_"+str(i), " \\", file=wfp)
             with open(f[1]) as fp:
                 print("opened", f[1])
                 for l in fp:
-                    st = '"'+l.replace('\\', '\\\\').replace('"', '\\"').replace('\n','\\n') + '"'
+                    st = '"'+l.replace('\\', '\\\\').replace('"', '\\"').replace('\n','\\n').replace('\r', '\\r') + '"'
                     try:
-                        stlen += len(eval(st))
+                        stlen += len(l.encode())
                     except Exception as e:
                         print(st)
                         raise e
@@ -63,7 +62,7 @@ with open("files.h", "w") as wfp:
         mime = "application/octate-stream"
         ext = f[0].rfind(".")
         ext = '' if ext < 0 else f[0][ext+1:].lower()
-#         if ext in mimes: continue
+        if ext in ["map", 'txt']: continue
         mime = mimes.get(ext, mime)
         print("\t{", '"' + f[0] + '",', "DATA_"+str(i), ", DATA_LEN_"+str(i)+",", "\"" + mime + "\"", "}, ", file=wfp)
     print("\t{ NULL, NULL, NULL }", file=wfp)
