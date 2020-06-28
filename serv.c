@@ -320,9 +320,10 @@ void respond(int sockFd, struct sockaddr_in clientaddr, socklen_t addrlen) {
         return;
     }
 
+    char *query = strchr(buf, '?');
     char *method = strtok(buf, " ");
     char *path = strtok(NULL, "? ");
-    char *query = strtok(NULL, " ");
+    query = query ? strtok(NULL, " ") : NULL;
 
 //     printf("method: %s ", method);
 //     printf("path: %s ", path);

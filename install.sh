@@ -27,7 +27,10 @@ try python3.7 ./createHeader.py
 try gcc -o remote_monitor serv.c
 
 
+sudo systemctl stop remoteMonitor
 sudo cp remote_monitor /usr/bin/
 sudo cp /tmp/remoteMonitor.service /etc/systemd/system/
+sudo systemctl daemon-reload
 sudo systemctl restart remoteMonitor
 sudo systemctl enable remoteMonitor
+sudo systemctl status remoteMonitor
