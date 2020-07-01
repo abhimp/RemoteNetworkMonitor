@@ -314,10 +314,10 @@
     var otherColors = ["DarkBlue", "DarkSalmon", "GreenYellow", "Cyan"]; //Object.keys(colornames); //
     var otherColorsNum = 0
     var colorTable = {}
-    function onReceive(res){
-        if(res.query == null || res.query == "")
+    function onReceive(res, rquery) {
+        if(rquery == null || rquery == "")
             return
-        var data = serversData[res.query].data
+        var data = serversData[rquery].data
         if (data == null)
             return
 
@@ -339,12 +339,12 @@
 
             if (data[ifc]["rx"].length == 0 && data[ifc]["tx"].length == 0)
                 continue
-            if(serversData[res.query].interfaces[ifc] == null){
+            if(serversData[rquery].interfaces[ifc] == null){
                 redrawLegend = true
-                serversData[res.query].interfaces[ifc] = true
+                serversData[rquery].interfaces[ifc] = true
             }
 
-            if (serversData[res.query].interfaces != null && serversData[res.query].interfaces[ifc] != null && serversData[res.query].interfaces[ifc]==false){
+            if (serversData[rquery].interfaces != null && serversData[rquery].interfaces[ifc] != null && serversData[rquery].interfaces[ifc]==false){
                 legendCnt ++
                 continue
             }
@@ -352,8 +352,8 @@
             for(var x in data[ifc]){
                 var xd = getTimedData(data[ifc][x], res["time"], 0)
                 var clr = null;
-                if (colorTable[res.query] && colorTable[res.query][ifc]){
-                    clr = colorTable[res.query][ifc];
+                if (colorTable[rquery] && colorTable[rquery][ifc]){
+                    clr = colorTable[rquery][ifc];
                 }
                 if(!clr){
                     clr = colors[ifc];
@@ -364,13 +364,13 @@
                         if(otherColors.length == otherColorsNum)
                             otherColorsNum = 0;
                     }
-                    if(!colorTable[res.query]){
-                        colorTable[res.query] = {}
+                    if(!colorTable[rquery]){
+                        colorTable[rquery] = {}
                     }
                     if(colornames[clr.toLowerCase()]){
                         clr = colornames[clr.toLowerCase()];
                     }
-                    colorTable[res.query][ifc] = clr;
+                    colorTable[rquery][ifc] = clr;
                     addColorsToStorage();
                 }
 
@@ -405,19 +405,19 @@
         }
         legendCnt = 0
         if(redrawLegend){
-            serversData[res.query].legend_holder.empty()
-            serversData[res.query].bytes_holder = {}
+            serversData[rquery].legend_holder.empty()
+            serversData[rquery].bytes_holder = {}
             for(var ifc in data){
-                var clr = colorTable[res.query][ifc] // colors[ifc]
+                var clr = colorTable[rquery][ifc] // colors[ifc]
                 var lg = $("<div>").css("margin-left", "20px").css("display", "inline-block")
                 var lgtxt = $("<div>").text(ifc+":").addClass("block_view").css("margin-left", "15px")
-                var lgcolorpicker = $("<input>").attr("type", "color").css("visibility", "hidden").val(clr).attr("data-clr-query", res.query).attr("data-clr-ifc", ifc)
+                var lgcolorpicker = $("<input>").attr("type", "color").css("visibility", "hidden").val(clr).attr("data-clr-query", rquery).attr("data-clr-ifc", ifc)
                 var lgcolor = $("<div>").addClass("legendBox").css("background", clr).addClass("block_view").css("margin-left", "5px").append(lgcolorpicker).click(function(){
                     // console.log($(this).children())
                     $(this).children()[0].click();
                 })
                 lgcolorpicker.change(function(){
-                    // alert(res.query + " " + ifc + " " + clr + " " + JSON.stringify(data))
+                    // alert(rquery + " " + ifc + " " + clr + " " + JSON.stringify(data))
                     var ifc = $(this).attr("data-clr-ifc");
                     var query = $(this).attr("data-clr-query");
                     var clr = $(this).val();
@@ -426,21 +426,21 @@
                     $(this).parent().css("background", clr);
                     // alert(clr);
                     addColorsToStorage();
-                    serversData[res.query].bytes_holder[ifc].rx_holder.css("color", clr)
-                    serversData[res.query].bytes_holder[ifc].tx_holder.css("color", clr)
+                    serversData[rquery].bytes_holder[ifc].rx_holder.css("color", clr)
+                    serversData[rquery].bytes_holder[ifc].tx_holder.css("color", clr)
                     // redrawLegend = true;
                 })
-                var lgselect = $("<input>").attr("type", "checkbox").css("float", "left").attr("ifcname", ifc).attr("server", res.query).change(function(){
+                var lgselect = $("<input>").attr("type", "checkbox").css("float", "left").attr("ifcname", ifc).attr("server", rquery).change(function(){
                     server = $(this).attr("server")
                     ifc = $(this).attr("ifcname")
-                    if(serversData[res.query].interfaces[ifc] == true){
-                        serversData[res.query].interfaces[ifc] = false
+                    if(serversData[rquery].interfaces[ifc] == true){
+                        serversData[rquery].interfaces[ifc] = false
                     }
                     else{
-                        serversData[res.query].interfaces[ifc] = true
+                        serversData[rquery].interfaces[ifc] = true
                     }
                 })
-                if(serversData[res.query].interfaces[ifc]){
+                if(serversData[rquery].interfaces[ifc]){
                     lgselect.attr("checked", "checked")
                 }
 
@@ -454,25 +454,25 @@
                 lg.append(lgselect).append(lgcolor).append(lgtxt)//.append(lgcolorpicker)
                 lgc.append(lg).append(tx_holder).append(rx_holder)
 
-                serversData[res.query].legend_holder.append(lgc)
-                serversData[res.query].bytes_holder[ifc] = {rx_holder : rx_bytes, tx_holder: tx_bytes}
+                serversData[rquery].legend_holder.append(lgc)
+                serversData[rquery].bytes_holder[ifc] = {rx_holder : rx_bytes, tx_holder: tx_bytes}
                 legendCnt++
             }
         }
-        serversData[res.query].data = data
+        serversData[rquery].data = data
 
         options.xaxis.tickFormatter = function(val, axis){return "<pre class='xtick'>" + val + "</pre>"}
-        $.plot(serversData[res.query].placeholder_rx, plotData.rx, options)
+        $.plot(serversData[rquery].placeholder_rx, plotData.rx, options)
 
         options.xaxis.tickFormatter = function(val, axis){return "<pre class='xtick xtick_tx'>" + val + "</pre>"}
-        $.plot(serversData[res.query].placeholder_tx, plotData.tx, options)
-        if(serversData[res.query].bytes_holder !== undefined){
+        $.plot(serversData[rquery].placeholder_tx, plotData.tx, options)
+        if(serversData[rquery].bytes_holder !== undefined){
             for ( ifc in res["ifcs"]) {
-                if(serversData[res.query].bytes_holder[ifc] !== undefined && serversData[res.query].bytes_holder[ifc].rx_holder !== undefined)
-                    serversData[res.query].bytes_holder[ifc].rx_holder.html(toHumanReadableBytes(res.ifcs[ifc].rx_bytes))
+                if(serversData[rquery].bytes_holder[ifc] !== undefined && serversData[rquery].bytes_holder[ifc].rx_holder !== undefined)
+                    serversData[rquery].bytes_holder[ifc].rx_holder.html(toHumanReadableBytes(res.ifcs[ifc].rx_bytes))
 
-                if(serversData[res.query].bytes_holder[ifc] !== undefined && serversData[res.query].bytes_holder[ifc].tx_holder !== undefined)
-                    serversData[res.query].bytes_holder[ifc].tx_holder.html(toHumanReadableBytes(res.ifcs[ifc].tx_bytes))
+                if(serversData[rquery].bytes_holder[ifc] !== undefined && serversData[rquery].bytes_holder[ifc].tx_holder !== undefined)
+                    serversData[rquery].bytes_holder[ifc].tx_holder.html(toHumanReadableBytes(res.ifcs[ifc].tx_bytes))
             }
         }
     }
@@ -481,16 +481,14 @@
     var runPlotInterval = null
 
     function fetchData(){
-        for(id in serversData){
+        Object.keys(serversData).forEach((id) => {
             $.ajax({
                 url: serversData[id].server,
                 data: id,
                 type: "GET",
-                success: function(res){onReceive(res)}
+                success: (r) => {onReceive(r, id)}
             })
-        }
-        // if(run)
-        //     setTimeout(fetchData, 1000);
+        })
     }
 
     function playPlot(){

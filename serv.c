@@ -35,6 +35,28 @@
 #endif
 #endif
 
+#define ALARM_INTERVAL 1000
+#define BUF_LEN 4096
+
+char PERIODIC_DATA[2][BUF_LEN];
+int PERIODIC_DATA_LEN[2] = {0,0};
+char PERIODIC_DATA_CONSUMED[2] = {1,0}; //to force first period load
+char PERIODIC_DATA_INDEX = 0;
+char PERIODIC_DATA_BUSY = 0;
+char PERIOD_COUNT = 0;
+
+
+pid_t childpid;
+int exitSignal = 0;
+
+
+
+
+void produceInfoDataPeriodically(int signal);
+void respond(int sockFd, struct sockaddr_in clientaddr, socklen_t addrlen);
+void runServerForever(int listenfd);
+
+
 int startServer(const char *port) {
 	int listenfd;
     struct sockaddr_in serv_addr;
@@ -71,12 +93,6 @@ int startServer(const char *port) {
     return listenfd;
 }
 
-void respond(int sockFd, struct sockaddr_in clientaddr, socklen_t addrlen);
-void runServerForever(int listenfd);
-
-pid_t childpid;
-int exitSignal = 0;
-
 void term_init(int signum)
 {
     if(childpid) {
@@ -88,8 +104,6 @@ void term_init(int signum)
     }
     printf("Caught terminit from childpid: %d, pid: %d, exitSignal=%d\n", childpid, getpid(), exitSignal);
 }
-
-
 
 void serve_forever(const char *PORT) {
     int listenfd;
@@ -108,6 +122,9 @@ void serve_forever(const char *PORT) {
     }
 
 
+#ifdef NOFORK
+    runServerForever(listenfd);
+#else
     // ACCEPT connections
     while(1) {
         childpid = 0;
@@ -132,8 +149,24 @@ void serve_forever(const char *PORT) {
         }
 
     }
+#endif
 
     close(listenfd);
+}
+
+void setupTimer() {
+    if (signal(SIGALRM, (void (*)(int)) produceInfoDataPeriodically) == SIG_ERR) {
+        perror("Unable to catch SIGALRM");
+        exit(1);
+    }
+    struct itimerval it_val;
+    it_val.it_value.tv_sec = ALARM_INTERVAL/1000;
+    it_val.it_value.tv_usec = (ALARM_INTERVAL*1000) % 1000000;
+    it_val.it_interval = it_val.it_value;
+    if (setitimer(ITIMER_REAL, &it_val, NULL) == -1) {
+        perror("error calling setitimer()");
+        exit(1);
+    }
 }
 
 void runServerForever(int listenfd) {
@@ -141,6 +174,8 @@ void runServerForever(int listenfd) {
     socklen_t addrlen;
     char c;
     int clientFd;
+
+    setupTimer();
 
     while (1)
     {
@@ -155,7 +190,6 @@ void runServerForever(int listenfd) {
     }
 }
 
-#define BUF_LEN 4096
 
 int sprintfTime(char *buf, size_t len) {
     struct timeval start;
@@ -284,6 +318,69 @@ int sprintfNetworkStat(char *response, int retlen, char *query) {
     return wrote;
 }
 
+void produceInfoDataPeriodically(int signal) {
+    PERIOD_COUNT += 1;
+    if (!PERIODIC_DATA_CONSUMED[PERIODIC_DATA_INDEX]) return;
+
+//     printf("Reading periodially\n");
+    PERIODIC_DATA_BUSY = 1;
+    int nextPeriod = 1 - PERIODIC_DATA_INDEX; // zero or one
+    PERIODIC_DATA_LEN[nextPeriod] = sprintfNetworkStat(PERIODIC_DATA[nextPeriod], sizeof(PERIODIC_DATA[nextPeriod]), ""); //query is no longer useful.
+    PERIODIC_DATA_CONSUMED[nextPeriod] = 0;
+    PERIODIC_DATA_INDEX = nextPeriod;
+    PERIODIC_DATA_BUSY = 0;
+}
+
+int getPeriodicData(char **data) {
+    char periodIndex = PERIODIC_DATA_INDEX;
+    *data = PERIODIC_DATA[periodIndex];
+    PERIODIC_DATA_CONSUMED[periodIndex] += 1;
+    return PERIODIC_DATA_LEN[periodIndex];
+}
+
+void respondWithHeaders(int sockFd, char *path/*, char *query */) {
+    char header[BUF_LEN];
+    int hcapa = BUF_LEN;
+    char *response;
+    int clen = 0;
+    int findex = -1;
+    int wrote = 0;
+    char *mime = "application/json";
+
+    if(path[0] == '/' && path[1]) {
+        int i;
+        for(i = 0; files[i][0]; i++){
+            if(strcmp(files[i][0], path+1) == 0) {
+                findex = i;
+                break;
+            }
+        }
+    }
+
+    if(findex > -1) {
+        clen = atoi(files[findex][2]);
+        response = files[findex][1];
+        mime = files[findex][3];
+    }
+    else{
+        clen = getPeriodicData(&response);
+    }
+
+
+
+    wrote += snprintf(header + wrote, hcapa - wrote, "HTTP/1.0 200 OK\r\n");
+    wrote += snprintf(header + wrote, hcapa - wrote, "Server: AONGBONG\r\n");
+    wrote += snprintf(header + wrote, hcapa - wrote, "Content-Length: %d\r\n", clen);
+    wrote += snprintf(header + wrote, hcapa - wrote, "Access-Control-Allow-Origin: *\r\n");
+    wrote += snprintf(header + wrote, hcapa - wrote, "Content-Type: %s\r\n", mime);
+    wrote += snprintf(header + wrote, hcapa - wrote, "\r\n");
+    header[wrote] = 0;
+
+    write(sockFd, header, wrote);
+
+    write(sockFd, response, clen);
+}
+
 /*
  * In simple application like this, I only need to read the querystring in the
  * first line of the request. I can safely ignore each and every line here.
@@ -320,66 +417,12 @@ void respond(int sockFd, struct sockaddr_in clientaddr, socklen_t addrlen) {
         return;
     }
 
-    char *query = strchr(buf, '?');
+//     char *query = strchr(buf, '?');
     char *method = strtok(buf, " ");
     char *path = strtok(NULL, "? ");
-    query = query ? strtok(NULL, " ") : NULL;
+//     query = query ? strtok(NULL, " ") : NULL;
 
-//     printf("method: %s ", method);
-//     printf("path: %s ", path);
-//     printf("query: %s\n", query);
-
-    int rd = 0;
-    int wrote = 0;
-    int retlen = BUF_LEN;
-
-    int i;
-    int found = 0;
-    char *mime = "application/json";
-    for(i = 0; path[0] && path[1] && files[i][0]; i++){
-//         printf("%s<=>%s\n", files[i][0], path+1);
-        if(strcmp(files[i][0], path+1) == 0) {
-//             printf("mathing\n");
-            found = 1;
-            break;
-        }
-    }
-//     printf("found: %d, i: %d\n", found, i);
-
-    int clen = 0;
-    char *header = response;
-
-    if(found) {
-        header = response;
-        clen = atoi(files[i][2]);
-        response = files[i][1];
-        mime = files[i][3];
-//         printf("clen: %d, mime: %s\n", clen, mime);
-    }
-    else{
-        rd = sprintfNetworkStat(response + wrote, retlen - wrote, query);
-        wrote += rd;
-        clen = wrote;
-
-        header = response + wrote + 4;
-        retlen -= 4;
-        wrote = 0;
-    }
-
-
-
-    wrote += snprintf(header + wrote, retlen - wrote, "HTTP/1.0 200 OK\r\n");
-    wrote += snprintf(header + wrote, retlen - wrote, "Server: AONGBONG\r\n");
-    wrote += snprintf(header + wrote, retlen - wrote, "Content-Length: %d\r\n", clen);
-    wrote += snprintf(header + wrote, retlen - wrote, "Access-Control-Allow-Origin: *\r\n");
-    wrote += snprintf(header + wrote, retlen - wrote, "Content-Type: %s\r\n", mime);
-    wrote += snprintf(header + wrote, retlen - wrote, "\r\n");
-    header[wrote] = 0;
-
-    write(sockFd, header, wrote);
-
-//     fwrite(response, 1, wrote, fp);
-    write(sockFd, response, clen);
+    respondWithHeaders(sockFd, path);
 
     free(buf);
     fclose(fp);
