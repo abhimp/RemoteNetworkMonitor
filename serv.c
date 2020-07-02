@@ -14,6 +14,7 @@
 #include <dirent.h>
 #include <ctype.h>
 #include <sys/wait.h>
+#include <errno.h>
 
 #include "files.h"
 
@@ -35,15 +36,27 @@
 #endif
 #endif
 
+#define SOCK_WAIT_MAX 2
 #define ALARM_INTERVAL 1000
 #define BUF_LEN 4096
+#define SOCK_STORE_BUFFER_LEN 255
+#define SOCK_STORE_LIMIT 100
 
 char PERIODIC_DATA[2][BUF_LEN];
 int PERIODIC_DATA_LEN[2] = {0,0};
 char PERIODIC_DATA_CONSUMED[2] = {1,0}; //to force first period load
 char PERIODIC_DATA_INDEX = 0;
 char PERIODIC_DATA_BUSY = 0;
-char PERIOD_COUNT = 0;
+unsigned char PERIOD_COUNT = 0;
+
+struct ConnInfoStore {
+    int sockFd;
+    int len;
+    char *space1; //path will stay in between
+    char *space2;
+    unsigned char sockTime;
+    char buffer[SOCK_STORE_BUFFER_LEN];
+};
 
 
 pid_t childpid;
@@ -55,103 +68,28 @@ int exitSignal = 0;
 void produceInfoDataPeriodically(int signal);
 void respond(int sockFd, struct sockaddr_in clientaddr, socklen_t addrlen);
 void runServerForever(int listenfd);
+int sprintfNetworkStat(char *response, int retlen, char *query);
 
+//===================================
 
-int startServer(const char *port) {
-	int listenfd;
-    struct sockaddr_in serv_addr;
-    int portno;
+void produceInfoDataPeriodically(int signal) {
+    PERIOD_COUNT += 1;
+    if (!PERIODIC_DATA_CONSUMED[PERIODIC_DATA_INDEX]) return;
 
-	listenfd = socket(AF_INET, SOCK_STREAM, 0);
-    if(listenfd < 0){
-        perror("Error in socket()");
-        exit(1);
-    }
-
-    portno = atoi(port);
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = INADDR_ANY;
-    serv_addr.sin_port = htons(portno);
-
-    int option = 1;
-    if(setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option)) < 0){
-        perror("setsockopt()");
-    }
-
-    if (bind(listenfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0){
-        perror("Error in bind()");
-        exit(2);
-    }
-
-    printf("Server listening on port %d\n", portno);
-    if ( listen(listenfd, 10) != 0 )
-    {
-        perror("listen() error");
-        exit(1);
-    }
-
-    return listenfd;
+//     printf("Reading periodially\n");
+    PERIODIC_DATA_BUSY = 1;
+    int nextPeriod = 1 - PERIODIC_DATA_INDEX; // zero or one
+    PERIODIC_DATA_LEN[nextPeriod] = sprintfNetworkStat(PERIODIC_DATA[nextPeriod], sizeof(PERIODIC_DATA[nextPeriod]), ""); //query is no longer useful.
+    PERIODIC_DATA_CONSUMED[nextPeriod] = 0;
+    PERIODIC_DATA_INDEX = nextPeriod;
+    PERIODIC_DATA_BUSY = 0;
 }
 
-void term_init(int signum)
-{
-    if(childpid) {
-        kill(childpid, SIGINT);
-        exitSignal = 1;
-    }
-    else{
-        exit(0);
-    }
-    printf("Caught terminit from childpid: %d, pid: %d, exitSignal=%d\n", childpid, getpid(), exitSignal);
-}
-
-void serve_forever(const char *PORT) {
-    int listenfd;
-    int wstatus;
-
-
-    listenfd = startServer(PORT);
-
-    if (signal(SIGTERM, term_init) == SIG_ERR) {
-        perror("Unable to catch SIGTERM");
-        exit(1);
-    }
-    if (signal(SIGINT, term_init) == SIG_ERR) {
-        perror("Unable to catch SIGINT");
-        exit(1);
-    }
-
-
-#ifdef NOFORK
-    runServerForever(listenfd);
-#else
-    // ACCEPT connections
-    while(1) {
-        childpid = 0;
-        childpid = fork();
-        if(childpid < 0){
-            perror("fork()");
-            break;
-        }
-        if(childpid == 0) {
-            runServerForever(listenfd);
-            exit(0);
-        }
-
-        pid_t pid = wait(&wstatus);
-        if(childpid != pid) {
-            fprintf(stderr, "pid not matching\n");
-        }
-
-        if(exitSignal) {
-            printf("ExitSignal recved\n");
-            break;
-        }
-
-    }
-#endif
-
-    close(listenfd);
+int getPeriodicData(char **data) {
+    char periodIndex = PERIODIC_DATA_INDEX;
+    *data = PERIODIC_DATA[periodIndex];
+    PERIODIC_DATA_CONSUMED[periodIndex] += 1;
+    return PERIODIC_DATA_LEN[periodIndex];
 }
 
 void setupTimer() {
@@ -169,25 +107,18 @@ void setupTimer() {
     }
 }
 
-void runServerForever(int listenfd) {
-    struct sockaddr_in clientaddr;
-    socklen_t addrlen;
-    char c;
-    int clientFd;
+//===================================
 
-    setupTimer();
-
-    while (1)
-    {
-        addrlen = sizeof(clientaddr);
-        clientFd = accept (listenfd, (struct sockaddr *) &clientaddr, &addrlen);
-        if(clientFd <= 0)
-            continue;
-
-        respond(clientFd, clientaddr, addrlen);
-        close(clientFd);
-
+void sigtermInit(int signum)
+{
+    if(childpid) {
+        kill(childpid, SIGINT);
+        exitSignal = 1;
     }
+    else{
+        exit(0);
+    }
+    printf("Caught terminit from childpid: %d, pid: %d, exitSignal=%d\n", childpid, getpid(), exitSignal);
 }
 
 
@@ -318,26 +249,6 @@ int sprintfNetworkStat(char *response, int retlen, char *query) {
     return wrote;
 }
 
-void produceInfoDataPeriodically(int signal) {
-    PERIOD_COUNT += 1;
-    if (!PERIODIC_DATA_CONSUMED[PERIODIC_DATA_INDEX]) return;
-
-//     printf("Reading periodially\n");
-    PERIODIC_DATA_BUSY = 1;
-    int nextPeriod = 1 - PERIODIC_DATA_INDEX; // zero or one
-    PERIODIC_DATA_LEN[nextPeriod] = sprintfNetworkStat(PERIODIC_DATA[nextPeriod], sizeof(PERIODIC_DATA[nextPeriod]), ""); //query is no longer useful.
-    PERIODIC_DATA_CONSUMED[nextPeriod] = 0;
-    PERIODIC_DATA_INDEX = nextPeriod;
-    PERIODIC_DATA_BUSY = 0;
-}
-
-int getPeriodicData(char **data) {
-    char periodIndex = PERIODIC_DATA_INDEX;
-    *data = PERIODIC_DATA[periodIndex];
-    PERIODIC_DATA_CONSUMED[periodIndex] += 1;
-    return PERIODIC_DATA_LEN[periodIndex];
-}
-
 void respondWithHeaders(int sockFd, char *path/*, char *query */) {
     char header[BUF_LEN];
     int hcapa = BUF_LEN;
@@ -356,6 +267,7 @@ void respondWithHeaders(int sockFd, char *path/*, char *query */) {
             }
         }
     }
+//     printf("Responing for path %s\n", path);
 
     if(findex > -1) {
         clen = atoi(files[findex][2]);
@@ -365,8 +277,6 @@ void respondWithHeaders(int sockFd, char *path/*, char *query */) {
     else{
         clen = getPeriodicData(&response);
     }
-
-
 
     wrote += snprintf(header + wrote, hcapa - wrote, "HTTP/1.0 200 OK\r\n");
     wrote += snprintf(header + wrote, hcapa - wrote, "Server: AONGBONG\r\n");
@@ -429,11 +339,207 @@ void respond(int sockFd, struct sockaddr_in clientaddr, socklen_t addrlen) {
 
 }
 
+void cleanClose(int sock) {
+    char buf[2048]; //header should not be bigger than this.
+    recv(sock, buf, 2048, MSG_DONTWAIT);
+    shutdown(sock, SHUT_RDWR);
+    close(sock);
+}
 
+
+void runServerForever(int listenfd) {
+    struct sockaddr_in clientaddr;
+    socklen_t addrlen;
+    char c;
+    int clientFd;
+    struct ConnInfoStore connInfos[SOCK_STORE_LIMIT];
+    int connCnt = 0;
+    int maxfd = 0;
+	fd_set rfds;
+
+    setupTimer();
+
+    maxfd = listenfd;
+	while(1){
+		FD_ZERO(&rfds);
+		maxfd = listenfd;
+        FD_SET(listenfd, &rfds);
+        int x;
+		for(x = 0; x < connCnt; x++) {
+			FD_SET(connInfos[x].sockFd, &rfds);
+			if(maxfd < connInfos[x].sockFd)
+				maxfd = connInfos[x].sockFd;
+		}
+
+		int selRet = select(maxfd + 1, &rfds, NULL, NULL, NULL);
+        if(selRet < 0) {
+            if(errno == EINTR)
+                continue;
+            perror("select");
+            return;
+        }
+
+
+        for(x = 0; x < connCnt; x ++) {
+            struct ConnInfoStore *conn = connInfos + x;
+            if((unsigned char)(PERIOD_COUNT - conn->sockTime) > SOCK_WAIT_MAX) { //its time to remove those stupids
+                cleanClose(connInfos[x].sockFd);
+                connInfos[x] = connInfos[connCnt - 1];
+                connCnt -= 1;
+                x -= 1;
+                continue;
+            }
+
+            if(FD_ISSET(conn->sockFd, &rfds)) {
+                int retlen = recv(conn->sockFd, conn->buffer + conn->len, SOCK_STORE_BUFFER_LEN - conn->len, 0);
+                if(retlen <= 0){
+                    cleanClose(connInfos[x].sockFd);
+                    connInfos[x] = connInfos[connCnt - 1];
+                    connCnt -= 1;
+                    x -= 1;
+                    continue;
+                }
+                char *sp = memchr(conn->buffer + conn->len, ' ', retlen);
+                conn->len += retlen;
+                if(sp && conn->space1 == NULL) {
+                    conn->space1 = sp;
+                    sp = memchr(sp+1, ' ', (conn->buffer + conn->len - sp - 1));
+                }
+
+                if(sp && conn->space2 == NULL){
+                    conn->space2 = sp;
+                    char *path = conn->space1 + 1;
+                    *sp = 0;
+                    respondWithHeaders(conn->sockFd, path);
+                    cleanClose(conn->sockFd);
+                    connInfos[x] = connInfos[connCnt - 1];
+                    connCnt -= 1;
+                    x -= 1;
+                    continue;
+                }
+                if(conn->len == SOCK_STORE_BUFFER_LEN && (!conn->space1 || !conn->space2)) { //extra large path. could be an attack
+                    cleanClose(conn->sockFd);
+                    connInfos[x] = connInfos[connCnt - 1];
+                    connCnt -= 1;
+                    x -= 1;
+                    continue;
+                }
+            }
+        }
+
+        if(FD_ISSET(listenfd, &rfds)) { //accept will be called at the end
+            addrlen = sizeof(clientaddr);
+            clientFd = accept (listenfd, (struct sockaddr *) &clientaddr, &addrlen);
+            if(clientFd <= 0)
+                continue;
+
+            if(connCnt == SOCK_STORE_LIMIT) {
+                cleanClose(clientFd);
+                continue;
+            }
+
+            connInfos[connCnt].sockFd = clientFd;
+            connInfos[connCnt].len = 0;
+            connInfos[connCnt].space1 = NULL;
+            connInfos[connCnt].space2 = NULL;
+            connInfos[connCnt].sockTime = PERIOD_COUNT;
+            connCnt += 1;
+
+//             printf("# connected sockets %d\n",connCnt);
+        }
+
+    }
+
+}
+
+int startServer(const char *port) {
+	int listenfd;
+    struct sockaddr_in serv_addr;
+    int portno;
+
+	listenfd = socket(AF_INET, SOCK_STREAM, 0);
+    if(listenfd < 0){
+        perror("Error in socket()");
+        exit(1);
+    }
+
+    portno = atoi(port);
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = INADDR_ANY;
+    serv_addr.sin_port = htons(portno);
+
+    int option = 1;
+    if(setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option)) < 0){
+        perror("setsockopt()");
+    }
+
+    if (bind(listenfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0){
+        perror("Error in bind()");
+        exit(2);
+    }
+
+    printf("Server listening on port %d\n", portno);
+    if ( listen(listenfd, 10) != 0 )
+    {
+        perror("listen() error");
+        exit(1);
+    }
+
+    return listenfd;
+}
+
+void serveForever(const char *PORT) {
+    int listenfd;
+    int wstatus;
+
+
+    listenfd = startServer(PORT);
+
+    if (signal(SIGTERM, sigtermInit) == SIG_ERR) {
+        perror("Unable to catch SIGTERM");
+        exit(1);
+    }
+    if (signal(SIGINT, sigtermInit) == SIG_ERR) {
+        perror("Unable to catch SIGINT");
+        exit(1);
+    }
+
+
+#ifdef NOFORK
+    runServerForever(listenfd);
+#else
+    // ACCEPT connections
+    while(1) {
+        childpid = 0;
+        childpid = fork();
+        if(childpid < 0){
+            perror("fork()");
+            break;
+        }
+        if(childpid == 0) {
+            runServerForever(listenfd);
+            exit(0);
+        }
+
+        pid_t pid = wait(&wstatus);
+        if(childpid != pid) {
+            fprintf(stderr, "pid not matching\n");
+        }
+
+        if(exitSignal) {
+            printf("ExitSignal recved\n");
+            break;
+        }
+
+    }
+#endif
+
+    cleanClose(listenfd);
+}
 
 int main(int argc, char *argv[]) {
     char *port = "9889";
     if(argc > 1)
         port = argv[1];
-    serve_forever(port);
+    serveForever(port);
 }
