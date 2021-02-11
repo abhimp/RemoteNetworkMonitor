@@ -23,7 +23,7 @@ try() {
     fi
 }
 
-try python3.7 ./createHeader.py
+try python ./createHeader.py
 try gcc -o remote_monitor serv.c
 
 
